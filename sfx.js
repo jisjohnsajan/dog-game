@@ -24,7 +24,8 @@ let noiseBuf = null;   // shared 1s white-noise buffer (splat burst)
 
 /* ------------------------------- lifecycle -------------------------------- */
 
-/** Create/resume the AudioContext. MUST be called from a user gesture. */
+/** Create/resume the AudioContext. MUST be called from a user gesture.
+ *  Also kick-starts preloading of every meme mp3 so throws play instantly. */
 export function init() {
   if (!ctx) {
     const AC = window.AudioContext || window.webkitAudioContext;
@@ -39,6 +40,8 @@ export function init() {
     noiseBuf = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
     const data = noiseBuf.getChannelData(0);
     for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+
+    preloadThrowSounds(); // warm the cache — zero-lag first yeet
   }
   if (ctx.state === 'suspended') ctx.resume();
 }
@@ -191,21 +194,38 @@ async function loadThrowSound(url) {
   return audio;
 }
 
-/** Pick a random meme (never the same one twice in a row) and play it. */
-export async function randomThrowSound() {
+/** Decode all throw sounds into memory up front (called from init()). */
+function preloadThrowSounds() {
+  for (const url of THROWS) loadThrowSound(url).catch(() => {});
+}
+
+/** Instant-play path for the yeet moment: pre-picks a clip and plays the
+ *  cached buffer directly — no await, no fetch, no audible delay. Falls back
+ *  gracefully if the buffer isn't decoded yet (then loads it for next time). */
+let nextThrowSound = null; // { url, buf } pre-selected for the next yeet
+
+export function playThrowSound() {
   if (!ready()) return;
+  // pick now (avoids repeats), play now
   let idx = Math.floor(Math.random() * THROWS.length);
   if (idx === lastThrowIdx && THROWS.length > 1) idx = (idx + 1) % THROWS.length;
   lastThrowIdx = idx;
   const url = THROWS[idx];
-  try {
-    const buf = await loadThrowSound(url);
+  const buf = throwBuffers.get(url);
+  if (buf) {
     const src = ctx.createBufferSource();
     src.buffer = buf;
     src.connect(master);
     src.start();
-  } catch (e) {
-    console.warn('throw sound failed:', url, e);
+  } else {
+    // not decoded yet — fire the async loader and play it the moment it's
+    // ready (first-ever throw only, after this it's always instant)
+    loadThrowSound(url).then((b) => {
+      const src = ctx.createBufferSource();
+      src.buffer = b;
+      src.connect(master);
+      src.start();
+    }).catch(() => {});
   }
 }
 

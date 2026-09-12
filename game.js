@@ -140,8 +140,7 @@ ratBody.addEventListener('collide', (e) => {
   const impactV = Math.abs(e.contact?.getImpactVelocityAlongNormal?.() ?? 0);
   if (impactV < 1.0) return;
   G.impactPlayed = true;
-  SFX.randomThrowSound();   // surprise meme clip 🎁
-  flashRandomMeme();        // ...and a surprise fullscreen meme 🖼️
+  flashRandomMeme();        // surprise fullscreen meme on impact 🖼️
 });
 
 /* ============================ MESH BUILDERS =============================== */
@@ -677,6 +676,7 @@ function yeet(dx = 0, dy = -innerHeight * 0.5) {
   );
 
   if (navigator.vibrate) navigator.vibrate([40, 40, 120]);
+  SFX.playThrowSound();     // meme clip fires INSTANTLY on the throw gesture 🎁
   popup('YEEEEET! 🚀🐭', swipe.endX, swipe.endY);
   setHint('🚀🐭💨 …waiting for the mess to settle…');
   G.yeetWatch = { settle: 0, elapsed: 0 };
