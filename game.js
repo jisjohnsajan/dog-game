@@ -132,6 +132,18 @@ const ratBody = new CANNON.Body({
 });
 physics.addBody(ratBody);
 
+/* MEME IMPACT: the random meme sound + fullscreen image fire at the exact
+ * moment the yeeted rat SMACKS into the ground (or furniture), not at launch.
+ * One trigger per flight; ignores soft grazes below 1 m/s impact speed.     */
+ratBody.addEventListener('collide', (e) => {
+  if (G.state !== State.YEETED || G.impactPlayed) return;
+  const impactV = Math.abs(e.contact?.getImpactVelocityAlongNormal?.() ?? 0);
+  if (impactV < 1.0) return;
+  G.impactPlayed = true;
+  SFX.randomThrowSound();   // surprise meme clip 🎁
+  flashRandomMeme();        // ...and a surprise fullscreen meme 🖼️
+});
+
 /* ============================ MESH BUILDERS =============================== */
 /* Swap these internals for GLTF models; keep origin/foot + facing:
  * rat faces +X, origin at feet; pet faces +Z, origin at body center.      */
@@ -655,6 +667,7 @@ function yeet(dx = 0, dy = -innerHeight * 0.5) {
 
   ratBody.type = CANNON.Body.DYNAMIC;
   ratBody.wakeUp();
+  G.impactPlayed = false;   // arm the meme impact trigger for this flight
   ratBody.position.set(G.rat.group.position.x, G.rat.group.position.y + CFG.rat.height, G.rat.group.position.z);
   ratBody.velocity.set(launch.x, launch.y, launch.z);
   ratBody.angularVelocity.set(
@@ -663,8 +676,6 @@ function yeet(dx = 0, dy = -innerHeight * 0.5) {
     (Math.random() - 0.5) * CFG.yeet.spin
   );
 
-  SFX.randomThrowSound();   // surprise meme clip 🎁
-  flashRandomMeme();        // ...and a surprise fullscreen meme 🖼️
   if (navigator.vibrate) navigator.vibrate([40, 40, 120]);
   popup('YEEEEET! 🚀🐭', swipe.endX, swipe.endY);
   setHint('🚀🐭💨 …waiting for the mess to settle…');
