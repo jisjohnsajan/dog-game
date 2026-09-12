@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <!-- viewport-fit=cover + user-scalable=no => proper fullscreen AR on phones -->
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#0b0e14" />
+  <title>Squeak &amp; Seek — AR Rat Yeeting Simulator 🐭</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0; height: 100%; overflow: hidden; background: #0b0e14; color: #e8ecf4;
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      touch-action: none; user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent;
+    }
+    canvas { display: block; }
+
+    /* ---------- HUD (visible in AR thanks to the dom-overlay feature) ---------- */
+    #hud { position: fixed; inset: 0; pointer-events: none; z-index: 10; }
+    #score {
+      position: absolute; top: calc(12px + env(safe-area-inset-top)); left: 14px;
+      font-size: 20px; font-weight: 800; text-shadow: 0 2px 6px #000a;
+      background: #0007; padding: 8px 14px; border-radius: 12px;
+    }
+    #badge {
+      position: absolute; top: calc(12px + env(safe-area-inset-top)); right: 14px;
+      font-size: 12px; font-weight: 700; opacity: .95; background: #0007; padding: 6px 10px; border-radius: 10px;
+    }
+    #hint {
+      position: absolute; bottom: calc(18px + env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%);
+      width: 92%; text-align: center; font-size: 15px; font-weight: 600; line-height: 1.35;
+      text-shadow: 0 2px 6px #000; background: #0009; border-radius: 14px; padding: 10px 14px;
+    }
+
+    /* floating score/action popups */
+    .popup {
+      position: fixed; left: 50%; font-size: 26px; font-weight: 900; white-space: nowrap;
+      text-shadow: 0 2px 8px #000; pointer-events: none; z-index: 15;
+      animation: pop 1.15s ease-out forwards;
+    }
+    @keyframes pop {
+      0%   { opacity: 0; transform: translate(-50%, 20px) scale(.6); }
+      15%  { opacity: 1; transform: translate(-50%, 0)     scale(1.15); }
+      75%  { opacity: 1; }
+      100% { opacity: 0; transform: translate(-50%, -70px) scale(1); }
+    }
+
+    /* ---------- Start / menu overlay ---------- */
+    #startOverlay {
+      position: fixed; inset: 0; z-index: 20; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 14px; text-align: center; padding: 24px;
+      background: radial-gradient(1200px 600px at 50% -10%, #1d2b45 0%, #0b0e14 60%);
+    }
+    #startOverlay h1 { font-size: 42px; margin: 0; letter-spacing: 1px; }
+    #startOverlay p.tag { margin: 0; font-size: 16px; color: #9fb4d8; font-weight: 600; }
+    #startOverlay ol {
+      text-align: left; max-width: 480px; font-size: 14px; line-height: 1.55; color: #c6d2e6;
+      background: #0004; border: 1px solid #ffffff14; border-radius: 14px; padding: 14px 18px 14px 34px;
+    }
+    #startOverlay button {
+      pointer-events: auto; cursor: pointer; border: 0; border-radius: 16px;
+      font-size: 20px; font-weight: 800; padding: 16px 34px; color: #10141d;
+      background: linear-gradient(180deg, #ffd166, #f4a93c); box-shadow: 0 8px 24px #f4a93c55;
+      transition: transform .1s;
+    }
+    #startOverlay button:active { transform: scale(.95); }
+    #startOverlay button.ghost {
+      color: #cfe0ff; background: #ffffff10; box-shadow: none; border: 1px solid #ffffff2a; font-size: 16px; padding: 12px 26px;
+    }
+    #startOverlay .note { font-size: 12px; color: #7c8db0; max-width: 420px; line-height: 1.5; }
+    /* fullscreen random meme image, shown briefly on every YEET */
+    #memeFlash {
+      position: fixed; inset: 0; z-index: 14; pointer-events: none;
+      display: flex; align-items: center; justify-content: center;
+      opacity: 0; transition: opacity .18s ease;
+      background: radial-gradient(circle at center, #000000cc 0%, #000000ee 100%);
+    }
+    #memeFlash.show { opacity: 1; }
+    #memeFlash img {
+      max-width: 92vw; max-height: 78vh; object-fit: contain;
+      border-radius: 18px; box-shadow: 0 20px 80px #000c;
+      transform: scale(.85); transition: transform .18s cubic-bezier(.2,.9,.3,1.4);
+    }
+    #memeFlash.show img { transform: scale(1); }
+  </style>
+</head>
+<body>
+  <!-- HUD layer. In AR this DOM becomes the "dom-overlay" and stays visible over the camera feed. -->
+  <div id="hud">
+    <div id="score">🚀 Yeeted: 0</div>
+    <div id="badge"></div>
+    <div id="hint"></div>
+  </div>
+
+  <div id="startOverlay">
+    <h1>🐭 Squeak &amp; Seek 🐶</h1>
+    <p class="tag">The world's most useless AR game: chase a rat, catch it, then <b>YEET</b> it.</p>
+    <ol>
+      <li>🐭 A rat spawns on your floor and scurries around your real room.</li>
+      <li>🐕 Your pet companion floats by the camera and <b>looks &amp; barks</b> toward the rat — even when it hides behind your table or pillar.</li>
+      <li>🏃 Physically move closer — the rat panics, runs, and <b>hides</b> under/behind detected surfaces.</li>
+      <li>👆 Corner it and <b>TAP the rat</b> on screen to catch it.</li>
+      <li>🚀 <b>SWIPE UP</b> to yeet it with glorious ragdoll physics. Repeat forever.</li>
+    </ol>
+    <button id="btnAR">ENTER AR 📱</button>
+    <button id="btnPreview" class="ghost">Preview in this browser 💻</button>
+    <p class="note">AR requires a WebXR device (Android Chrome + ARCore, or WebXR emulator) over HTTPS. The preview mode simulates a room with a pillar + table so you can play the whole loop on desktop.</p>
+  </div>
+
+  <!-- fullscreen meme flash overlay: random image pops for ~1.5 s on each YEET -->
+  <div id="memeFlash"><img alt="" /></div>
+
+  <!-- Import map: Three.js + OrbitControls + cannon-es (modern maintained Cannon.js fork) from CDN -->
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/",
+      "cannon-es": "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cannon-es.js"
+    }
+  }
+  </script>
+  <script type="module" src="./game.js"></script>
+</body>
+</html>
