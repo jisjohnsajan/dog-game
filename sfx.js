@@ -183,7 +183,23 @@ const THROWS = [
 ];
 
 const throwBuffers = new Map(); // url -> AudioBuffer (lazy-loaded once)
-let lastThrowIdx = -1;         // avoid repeating the same clip twice in a row
+
+/* SHUFFLE BAG: like drawing cards from a shuffled deck — every clip plays
+ * once before the deck reshuffles. Feels truly random, never repeats early. */
+function makeShuffleBag(items) {
+  let bag = [];
+  return function next() {
+    if (bag.length === 0) {
+      bag = items.slice();
+      for (let i = bag.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [bag[i], bag[j]] = [bag[j], bag[i]];
+      }
+    }
+    return bag.pop();
+  };
+}
+const nextThrow = makeShuffleBag(THROWS);
 
 async function loadThrowSound(url) {
   if (throwBuffers.has(url)) return throwBuffers.get(url);
@@ -199,18 +215,11 @@ function preloadThrowSounds() {
   for (const url of THROWS) loadThrowSound(url).catch(() => {});
 }
 
-/** Instant-play path for the yeet moment: pre-picks a clip and plays the
- *  cached buffer directly — no await, no fetch, no audible delay. Falls back
- *  gracefully if the buffer isn't decoded yet (then loads it for next time). */
-let nextThrowSound = null; // { url, buf } pre-selected for the next yeet
-
+/** Instant-play path for the yeet moment: draws the next clip from the
+ *  shuffle bag and plays the cached buffer directly — no await, no fetch. */
 export function playThrowSound() {
   if (!ready()) return;
-  // pick now (avoids repeats), play now
-  let idx = Math.floor(Math.random() * THROWS.length);
-  if (idx === lastThrowIdx && THROWS.length > 1) idx = (idx + 1) % THROWS.length;
-  lastThrowIdx = idx;
-  const url = THROWS[idx];
+  const url = nextThrow();
   const buf = throwBuffers.get(url);
   if (buf) {
     const src = ctx.createBufferSource();

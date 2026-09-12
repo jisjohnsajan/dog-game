@@ -363,15 +363,25 @@ const MEME_IMAGES = [
 
 const memeFlash = document.getElementById('memeFlash');
 const memeImg = memeFlash.querySelector('img');
-let lastMemeIdx = -1;
+
+/* SHUFFLE BAG (deck-of-cards random): every image shows once before any
+ * repeats — feels truly random, never "the same one again". */
+let memeBag = [];
 let memeTO = null;
+function nextMemeImage() {
+  if (memeBag.length === 0) {
+    memeBag = MEME_IMAGES.slice();
+    for (let i = memeBag.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [memeBag[i], memeBag[j]] = [memeBag[j], memeBag[i]];
+    }
+  }
+  return memeBag.pop();
+}
 
 /** Flash a random meme image fullscreen for ~1.5 seconds. */
 function flashRandomMeme() {
-  let idx = Math.floor(Math.random() * MEME_IMAGES.length);
-  if (idx === lastMemeIdx && MEME_IMAGES.length > 1) idx = (idx + 1) % MEME_IMAGES.length;
-  lastMemeIdx = idx;
-  memeImg.src = MEME_IMAGES[idx];
+  memeImg.src = nextMemeImage();
   memeFlash.classList.add('show');
   clearTimeout(memeTO);
   memeTO = setTimeout(() => memeFlash.classList.remove('show'), 1500);
